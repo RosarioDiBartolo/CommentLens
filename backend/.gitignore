@@ -1,0 +1,63 @@
+# Adapted from https://github.com/github/gitignore/blob/main/Python.gitignore
+
+# Python bytecode and compiled extensions
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+venv.bak/
+env.bak/
+
+# Packaging/build output
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+wheels/
+
+# Test, coverage, and analysis caches
+.pytest_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+.cache/
+.ipynb_checkpoints/
+
+# Django local state and generated files (keep migrations and source static files)
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+db.sqlite3-wal
+db.sqlite3-shm
+/staticfiles/
+/media/
+
+# Model and numerical compilation caches used by CommentLens
+/ml_cache/
+/numba_cache/
+*.nbc
+*.nbi
+
+# Environment files and local logs
+.env
+.env.*
+!.env.example
+*.log

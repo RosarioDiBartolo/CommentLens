@@ -1,15 +1,22 @@
-ml_cache/
-numba_cache/
-__pycache__/
-*.pyc
-*.nbc
-*.nbi
-db.sqlite3
+# Local environment and secrets (keep placeholder templates)
 .env
 .env.*
 !.env.example
-.venv/
-venv/
-staticfiles/
-build.sh
-warmup.py
+.envrc
+
+# Shared logs and operating-system files
+*.log
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local editor state; shared VS Code recommendations/settings remain trackable
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.swp
+*.swo
+*~

@@ -1,24 +1,38 @@
-# Logs
-logs
+# Adapted from https://github.com/github/gitignore/blob/main/Node.gitignore
+
+# Dependencies and package-manager caches (keep package-lock.json)
+node_modules/
+.npm/
+.pnpm-store/
+
+# Vite builds and caches
+/dist/
+/dist-ssr/
+.vite/
+.vite-temp/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Tests, coverage, and linter caches
+coverage/
+.nyc_output/
+*.lcov
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
+# Logs and Node diagnostic reports
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-node_modules
-dist
-dist-ssr
+# Local environment (VITE_ values are public; keep the example)
+.env
+.env.*
+!.env.example
 *.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
