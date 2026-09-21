@@ -1,86 +1,217 @@
-# CommentLens 👁️
+# CommentLens
 
-An AI-powered Audience Intelligence pipeline that transforms thousands of unstructured YouTube video comments into clean, actionable, clustered topic signals for content creators and marketing teams.
+CommentLens groups YouTube comments into audience topics using a React dashboard,
+a Django REST API, and a Python NLP pipeline. The current API fetches **up to 50
+top-level comments per analysis**, cleans them, embeds them with
+`all-MiniLM-L6-v2`, reduces dimensions with UMAP, and groups them with HDBSCAN.
+Topics include representative comments and are ranked using cluster size and likes.
 
-Unlike generic analytics tools that rely strictly on quantitative metrics like views or likes, **CommentLens** implements a custom, multi-stage Natural Language Processing (NLP) data engineering pipeline to surface core semantic themes and eliminate baseline comment noise.
+## Prerequisites
 
----
+- Git.
+- **Python 3.11** (the repository's `backend/runtime.txt` specifies 3.11.9).
+  Use the 3.11 series for the pinned scientific packages; newer Python versions
+  may lack compatible wheels.
+- **Node.js 22.13+ on the 22.x line, or Node.js 24+**, with npm. This covers the
+  Vite 8 and ESLint 10 requirements recorded in the lockfile.
+- A Google Cloud project with **YouTube Data API v3** enabled and an API key.
+- Internet access for package installation, YouTube requests, and the initial
+  sentence-transformer model download. The ML dependencies require substantial
+  disk space and memory; the first analysis can take longer while downloading
+  the model and compiling numerical routines.
+- A C/C++ compiler may be needed if pip builds `hdbscan` from source (on Windows,
+  Microsoft C++ Build Tools; on macOS, Xcode command-line tools; on Linux, your
+  distribution's compiler/development packages).
 
-## 🏗️ Core Architecture & Data Flow
+SQLite is used locally; no separate database server is required.
 
-The application is engineered with a high-performance Python backend leveraging Django REST Framework (DRF) and a highly responsive React frontend dashboard optimized with Vite.
+## Clone
 
-### The 5-Stage Request & Processing Pipeline
-
-1. **Ingestion Layer:** The client sends a target YouTube URL via Axios to the backend. The backend extracts the unique Video ID and calls the YouTube Data API v3, paginating through comment threads to aggregate text, author identities, and engagement counts.
-2. **Spam Shield & Data Hygiene:** Raw comments pass through seven distinct sequence filters to remove syntax anomalies, non-English noise, and engagement traps.
-3. **Dense Vector Embeddings:** Sanitized text outputs are mapped into a continuous vector space utilizing an asynchronous or lazy-loaded Transformer architecture.
-4. **Dimensionality Reduction:** High-dimensional spaces (384D) are projected down into lower manifolds (5D) while preserving essential local neighborhood structures to prevent spatial distance decay.
-5. **Density Clustering & Ranking:** Density-based geometric algorithms organically isolate semantic clusters without requiring an arbitrary cluster count input (K), separating valid topics from background architectural noise.
-
----
-
-## 🧪 Deep Dive: Data Engineering & Machine Learning
-
-### 1. Data Hygiene Operations (`cleaner.py`)
-
-To prevent data contamination ("garbage-in, garbage-clusters"), every comment passes through an isolated cleaning matrix:
-
-- **HTML Entity Decoding:** Converts characters like `&#39;` and `&amp;` back to literal string characters (`'` and `&`).
-- **Structural Tag Elimination:** Drops elements like `<br>` and `<b>` using strict regular expression patterns.
-- **Hyperlink Removal:** Identifies and strips full URLs to eliminate artificial grouping patterns.
-- **Emoji Stripping:** Drops dense emoji layouts that skew spatial embeddings away from purely text-based definitions.
-- **Length & Frequency Culling:** Filters out low-signal comments containing fewer than 5 tokens (e.g., "nice video", "first").
-- **Language Distribution Check:** Enforces an ASCII density ratio constraint (ASCII Characters / Total Characters ≥ 0.5) to safely filter out scripts like Cyrillic, Arabic, or Devanagari, ensuring model language alignment.
-
-### 2. Sentence Embeddings (`embedder.py`)
-
-- **Architecture:** `all-MiniLM-L6-v2` (Sentence-Transformers library).
-- **Vector Matrix:** Maps each comment into a 384-dimensional dense vector space representation.
-- **Metric Choice:** Uses Cosine Similarity rather than traditional Euclidean calculations to evaluate directional alignment and capture identical sentiment independent of structural length variations.
-- **Optimization Strategy:** Implements lazy model loading deferred to the runtime request phase, keeping initial backend start-up memory usage low.
-
-### 3. Topological Structural Reduction (UMAP)
-
-To resolve the **Curse of Dimensionality** (where high-dimensional points become uniformly equidistant), UMAP reduces data from 384D down to 5D:
-
-- `n_components = 5`: Retains critical topological neighborhoods without over-compressing down to standard visual 2D space.
-- `n_neighbors = min(15, n_samples - 1)`: Dynamically shifts bounds to prevent runtime crashes when dealing with small, heavily filtered message sets.
-- `min_dist = 0.0`: Maximizes local point packing constraints inside the low-dimensional space to highlight explicit density transitions for downstream clustering.
-- `metric = 'cosine'`: Enforces mathematical consistency with the initial embedding model space boundaries.
-
-### 4. Mathematical Density Clustering (HDBSCAN)
-
-Rather than relying on K-Means (which assumes uniform spherical shapes and forces arbitrary placement of structural noise), CommentLens leverages Hierarchical Density-Based Spatial Clustering of Applications with Noise (HDBSCAN):
-
-- **Dynamic Determination:** Evaluates dense spatial regions to auto-discover the natural number of topic groups.
-- **Noise Segregation:** Identifies loose, un-correlated text signals and isolates them into a dedicated outlier category labeled `-1`.
-- **`min_cluster_size = min(5, n_samples // 3)`:** Adapts clustering parameters programmatically according to overall video comment volume.
-- **Representative Synthesis:** Finds key representative highlights by computing the arithmetic centroid of the cluster embeddings, then isolating the top three comments with the minimal cosine distance to that centroid.
-
----
-
-## 🛠️ Technical Implementation Stack
-
-- **Frontend Interface:** React 18+, Vite Build Toolchain, CSS3 Architecture System.
-- **API Service Layer:** Axios HTTP Client, Django Rest Framework (DRF).
-- **Core NLP Analytics Ecosystem:** Python 3.10+, Sentence-Transformers, UMAP-learn, HDBSCAN, NumPy, Regex Processing Libraries.
-
----
-
-## 🚀 Installation & Local Environment Setup
-
-### 1. High-Performance Analytics Backend
-
-```bash
-cd backend
-python -m venv venv
-
-# Activate Environment (Windows)
-.\venv\Scripts\activate
-# Activate Environment (Mac/Linux)
-source venv/bin/activate
-
-pip install -r requirements.txt
-python manage.py runserver
+```sh
+git clone https://github.com/RosarioDiBartolo/CommentLens.git
+cd CommentLens
 ```
+
+## Backend setup
+
+Run from the repository root. On macOS/Linux:
+
+```sh
+cd backend
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+cp .env.example .env
+```
+
+On Windows PowerShell:
+
+```powershell
+cd backend
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Edit `backend/.env` before starting Django:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), select/create
+   a project, enable **YouTube Data API v3** under APIs & Services > Library,
+   and create an API key under APIs & Services > Credentials. Restrict the key
+   to YouTube Data API v3. Any application restrictions must permit requests
+   from the backend; browser-referrer restrictions do not suit this server client.
+2. Replace `YOUTUBE_API_KEY` with your key. Keep it on the backend only.
+3. Generate a fresh Django secret with the following command, then paste the
+   result into `DJANGO_SECRET_KEY` in `backend/.env`:
+
+```sh
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+Keep `DEBUG=True` for local development. Then, from `backend/` with the virtual
+environment active:
+
+```sh
+python manage.py migrate
+python manage.py check
+python manage.py runserver localhost:8000
+```
+
+Leave this terminal running. Open **http://localhost:8000/** to see a JSON
+response with `status: online`. The analysis endpoint is
+`POST http://localhost:8000/api/analyze/` with a JSON body containing `url`.
+Visiting that endpoint in a browser uses GET and will not run an analysis.
+
+## Frontend setup
+
+Open a **second terminal**, starting at the repository root:
+
+```sh
+cd frontend
+npm ci
+cp .env.example .env
+npm run dev -- --port 5173 --strictPort
+```
+
+In PowerShell use `Copy-Item .env.example .env` for the copy step.
+The example sets `VITE_API_BASE_URL=http://localhost:8000`. Open
+**http://localhost:5173/** and submit a public YouTube video URL with enabled
+comments and enough meaningful text. Both servers must remain running.
+
+Use the backend **origin**, without `/api` or `/api/analyze/`. The frontend
+appends `/api/analyze/` and removes trailing slashes from the configured origin.
+Restart Vite after editing its environment file.
+
+### Frontend checks and build
+
+From `frontend/`:
+
+```sh
+npm run lint
+npm run build
+npm run preview -- --port 4173 --strictPort
+```
+
+The output is `frontend/dist/`. Preview serves it at **http://localhost:4173/**
+and still needs the backend. Vite embeds environment variables at build time:
+set the backend URL before building and rebuild when it changes. Preview and
+Django's development server are local development tools, not production servers.
+
+## Environment variables
+
+| Variable | Location | Purpose |
+| --- | --- | --- |
+| `YOUTUBE_API_KEY` | `backend/.env` or backend process environment | Required for YouTube analysis; no key is bundled. |
+| `DJANGO_SECRET_KEY` | `backend/.env` or backend process environment | Required at Django startup; generate your own value. |
+| `DEBUG` | `backend/.env` or backend process environment | Exact value `True` enables debug; default is `False`. |
+| `VITE_API_BASE_URL` | `frontend/.env` or frontend build/dev environment | Backend origin; defaults to `http://localhost:8000`. Public, not a secret. |
+| `VITE_API_URL` | Frontend environment (legacy) | Backward-compatible fallback if `VITE_API_BASE_URL` is unset or blank. |
+
+The backend loads `backend/.env` by its absolute location, independently of the
+working directory. Existing process environment variables take precedence.
+Vite also supports mode-specific environment files such as `.env.production`.
+All `VITE_` values are visible in the browser: never place API keys or Django
+secrets in the frontend environment.
+
+Real `.env` files, their mode/local variants, virtual environments, SQLite data,
+and model caches are ignored by Git. Only placeholder `.env.example` files
+should be committed. Copy examples only on first setup to avoid overwriting
+existing credentials.
+
+**Existing deployments:** a Django secret was previously committed in source.
+Treat it as exposed and replace it wherever it was used, supplying the new value
+through `DJANGO_SECRET_KEY`. Removing it from the current source does not remove
+it from Git history. This change does not rotate credentials or rewrite history.
+Existing deployments using `VITE_API_URL` remain supported; prefer
+`VITE_API_BASE_URL` for new configuration.
+
+## Project structure
+
+```text
+CommentLens/
+├── README.md
+├── backend/
+│   ├── .env.example         # Backend configuration template
+│   ├── manage.py           # Django management commands
+│   ├── requirements.txt    # Pinned Python dependencies
+│   ├── runtime.txt         # Python runtime reference
+│   ├── backend/            # Django settings and root routes
+│   ├── api/                # POST /api/analyze/ view and routes
+│   └── pipeline/           # YouTube ingestion, cleaning, embedding, clustering
+└── frontend/
+    ├── .env.example         # Public backend-origin setting
+    ├── package.json         # npm commands and dependencies
+    ├── package-lock.json    # Reproducible npm install
+    ├── vite.config.js       # Vite + React configuration
+    └── src/                 # Dashboard and styles; App.jsx calls the API
+```
+
+## Processing details
+
+The existing pipeline keeps display text separate from normalized embedding
+text. It removes markup, links, common engagement spam, and comments with fewer
+than four words or an ASCII ratio below 0.65; this is a heuristic, not language
+detection. Sentence embeddings have 384 dimensions. UMAP uses up to five output
+dimensions, adjusted for small samples, followed by HDBSCAN density clustering.
+Noise points are excluded from returned topics. Each topic includes up to three
+comments closest to its centroid and a title derived from frequent words.
+
+## Troubleshooting
+
+- **Python dependency installation fails:** check `python --version` inside the
+  activated environment; use Python 3.11 and upgrade pip. Install compiler tools
+  if the error concerns building HDBSCAN. The pinned dependencies are preserved;
+  do not assume they support the newest Python.
+- **PowerShell blocks activation:** use `.\.venv\Scripts\python.exe` instead of
+  `python` for each backend command; activation is optional when invoking the
+  virtual environment interpreter directly.
+- **Node engine errors:** verify `node --version` against the prerequisites,
+  then rerun `npm ci`.
+- **Missing `DJANGO_SECRET_KEY`:** copy the backend example, generate a value,
+  and set it in `backend/.env`. Django intentionally refuses to start without it.
+- **Missing key / YouTube API error:** set `YOUTUBE_API_KEY` in `backend/.env`,
+  enable YouTube Data API v3 for its project, check key restrictions, and restart
+  Django. A missing YouTube key allows the health endpoint to work but analysis
+  fails. Quota exhaustion returns a 503; check the project's API quota.
+- **Frontend cannot reach backend:** first open http://localhost:8000/, then
+  check `VITE_API_BASE_URL`, port, and protocol. Do not append `/api`. Restart
+  Vite after changing `.env`; rebuild deployed assets. An HTTPS frontend needs
+  an HTTPS backend to avoid mixed-content blocking.
+- **CORS or host errors:** local `localhost` and `127.0.0.1` are allowed. The
+  current settings allow all CORS origins and retain existing deployment hosts
+  and CSRF origins. For other hosts/deployment origins, review `ALLOWED_HOSTS`,
+  `CSRF_TRUSTED_ORIGINS`, and CORS settings in `backend/backend/settings.py`;
+  these existing deployment settings are not a production-hardening guide.
+- **Port already used:** stop the conflicting process or pick another port.
+  If the backend port changes, update `VITE_API_BASE_URL` accordingly. The
+  documented Vite command fails explicitly instead of silently changing ports.
+- **Slow first analysis / model download fails:** allow the Hugging Face model
+  download and enough disk/memory. The backend uses `backend/ml_cache/` and
+  `backend/numba_cache/`; later requests can reuse caches.
+- **Disabled comments / too few comments:** choose another public video. The
+  API requires at least 10 fetched comments and five after cleaning. Sparse
+  samples can still produce no clusters; the frontend does not analyze replies
+  or every comment on a large video.

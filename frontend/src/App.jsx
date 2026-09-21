@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import axios from 'axios'
 import './App.css'
-const API_URL = import.meta.env.VITE_API_URL;
+// Keep the previous variable working for existing deployments.
+const API_URL = (
+  import.meta.env.VITE_API_BASE_URL?.trim() ||
+  import.meta.env.VITE_API_URL?.trim() ||
+  'http://localhost:8000'
+).replace(/\/+$/, '')
 
 const LOADING_STEPS = [
   'Reading audience conversations...',

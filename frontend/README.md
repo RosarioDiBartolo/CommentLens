@@ -1,16 +1,35 @@
-# React + Vite
+# CommentLens frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 with Vite 8. Use Node.js 22.13+ on the 22.x line, or Node.js 24+,
+and npm. Run these commands from `frontend/`:
 
-Currently, two official plugins are available:
+```sh
+npm ci
+cp .env.example .env
+npm run dev -- --port 5173 --strictPort
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`.
+Open http://localhost:5173 and keep the backend running in a separate terminal.
 
-## React Compiler
+Set `VITE_API_BASE_URL=http://localhost:8000` in `frontend/.env` to point to
+your Django backend. Use its origin only, without `/api`; the app appends
+`/api/analyze/`. Trailing slashes are accepted. The default is
+`http://localhost:8000`. The legacy `VITE_API_URL` is still supported when
+`VITE_API_BASE_URL` is unset or blank.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Restart Vite after changing environment variables. For deployments, set the
+variable before building and rebuild after changes. Every `VITE_` variable is
+public browser configuration: never add YouTube keys or other secrets here.
 
-## Expanding the ESLint configuration
+```sh
+npm run lint
+npm run build
+npm run preview -- --port 4173 --strictPort
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+The build output is `dist/`; preview is at http://localhost:4173 and still
+requires a running backend. Preview is for checking a build locally.
+
+See the [repository setup guide](../README.md) for backend installation,
+YouTube credentials, environment variables, and troubleshooting.

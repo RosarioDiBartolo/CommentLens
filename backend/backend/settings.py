@@ -1,17 +1,18 @@
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-
-load_dotenv()
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 # Cache directories inside the project so they persist after the build phase
-import os
 os.environ["HF_HOME"] = str(BASE_DIR / "ml_cache")
 os.environ["NUMBA_CACHE_DIR"] = str(BASE_DIR / "numba_cache")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-fallback-key-change-in-production")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    raise ImproperlyConfigured("Set DJANGO_SECRET_KEY in backend/.env or the environment.")
 
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
