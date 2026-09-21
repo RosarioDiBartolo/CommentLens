@@ -169,6 +169,101 @@ CommentLens/
     └── src/                 # Dashboard and styles; App.jsx calls the API
 ```
 
+## Saved analyses and reusable embeddings
+
+After pulling this feature, activate the backend virtual environment, install the
+updated `requirements.txt`, and run `python manage.py migrate` from `backend/`.
+The new Django tables live in the existing `backend/db.sqlite3`; no extra database
+service is required. Keep that file on a **persistent local disk** for a deployed
+single-instance backend. Ephemeral deployment filesystems lose this cache when
+restarted/redeployed. Multiple backend instances should use a shared server database
+such as PostgreSQL rather than separate SQLite files. This remains a synchronous
+analysis service; large batches/background workers are outside this change.
+
+Submit a previously analysed video URL to reopen its saved result. Equivalent
+watch, short-link, Shorts, embed, and live URLs use the same canonical video ID.
+Fresh results are reused for 24 hours by default, without calling YouTube or the
+embedding model. Set `ANALYSIS_CACHE_TTL_SECONDS` in the backend environment to a
+value from `0` to `2505599`; `0` always fetches fresh data. Restart Django after
+changing it. The result shows when the comments were last fetched.
+
+**Refresh comments** fetches the current sample and updates texts, authors, and
+likes. Existing embeddings are reused when the comment ID, normalized-text hash,
+model revision, and cleaning version match. New/edited normalized text is embedded
+in a batch; a likes-only change does not require re-embedding. A model or cleaner
+version change invalidates embeddings. A clustering/pipeline version change
+recomputes clusters while reusing compatible vectors. Developers changing these
+algorithms must bump the corresponding version constants. Original 384-dimensional
+vectors are kept in `Embedding.vector` (`JSONField`), alongside `cleaned_text`,
+`text_hash`, model/cleaner versions, and a foreign key to the matching comment.
+Vectors stay on the server and can be reused through Django's ORM.
+
+The database stores one current snapshot per video, including raw sampled comments,
+cleaned embeddings, analysis metadata, clusters, and their comment memberships with
+centroid similarities. A successful refresh atomically replaces that snapshot and
+removes comments outside the new sample and obsolete vectors. Comments outside the
+sample are not assumed to have been deleted on YouTube. A failed fetch/model/save
+leaves the prior complete snapshot intact; a successful fetch with too few usable
+comments clears the superseded result. This is a shared cache of public comments,
+not private per-user storage or a permanent history/archive. Retention deletion
+cascades through comments, embeddings, and clusters.
+
+Within **every cluster**, choose:
+
+- **Most representative:** the actual comment closest to the centroid is highlighted,
+  followed by up to five more comments ordered by cosine similarity in the original
+  embedding space. The centroid itself is an average vector, not a comment.
+- **Most liked:** comments in that same cluster ordered by descending likes, showing
+  five initially. Ties use comment ID for stable ordering.
+
+Both views include text, author, and like count. **Show more** adds five comments;
+**Show fewer** restores the initial limit. Changing the view is local to that cluster
+and makes no network/model calls. Likes reflect the displayed fetch time, not live
+counts. All clusters are accessible, and a no-clusters result has an explicit empty
+state. The existing sample limit remains 50 top-level comments; replies are excluded.
+
+### Cache API and maintenance
+
+`POST /api/analyze/` accepts `{"url": "https://youtu.be/VIDEO_ID", "refresh": false}`.
+Set `refresh` to JSON `true` to fetch again. The response adds `analysis_id`,
+`video_id`, `cached`, `fetched_at`, and `analyzed_at`. Each cluster includes a
+`comments` list with `comment_id`, `text`, `author`, `likes`, and `similarity`.
+The legacy `top_comments` list of three strings is retained for existing clients.
+Vectors are never serialized into this response. Analysis/cluster identifiers are
+snapshot-local and may change on refresh.
+
+Stored API data must be refreshed or removed within the applicable
+[YouTube API retention limits](https://developers.google.com/youtube/terms/developer-policies#refreshing,-storing,-and-displaying-api-data).
+The app purges snapshots aged 29 days (a one-day margin before 30 days) on analysis requests. **For deployments,
+schedule the following command at least daily**, even when there is no traffic:
+
+```sh
+python manage.py purge_video_cache
+```
+
+Use a scheduler interval and retention margin appropriate to your deployment's
+requirements; no scheduler is installed automatically. Backup retention also needs
+to respect your data-retention policy. No cache database or fetched data is committed.
+
+### Feature verification
+
+```sh
+# From backend/, with its virtual environment active and DJANGO_SECRET_KEY set:
+python manage.py test api
+python manage.py makemigrations --check --dry-run
+
+# From frontend/:
+npm ci
+npm test
+npm run lint
+npm run build
+```
+
+Backend tests mock YouTube and embedding inference for repeatable cache tests, and
+include a real UMAP/HDBSCAN smoke test. Frontend tests cover ordering, displayed
+metadata, pagination, cache state, and refresh failure handling. UMAP 0.5.3 still
+imports `pkg_resources`, so the dependency file pins compatible setuptools.
+
 ## Processing details
 
 The existing pipeline keeps display text separate from normalized embedding
@@ -176,8 +271,8 @@ text. It removes markup, links, common engagement spam, and comments with fewer
 than four words or an ASCII ratio below 0.65; this is a heuristic, not language
 detection. Sentence embeddings have 384 dimensions. UMAP uses up to five output
 dimensions, adjusted for small samples, followed by HDBSCAN density clustering.
-Noise points are excluded from returned topics. Each topic includes up to three
-comments closest to its centroid and a title derived from frequent words.
+Noise points are excluded from returned topics. Each topic includes all of its member comments, ordered by centroid similarity,
+and a title derived from frequent words.
 
 ## Troubleshooting
 

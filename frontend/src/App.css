@@ -107,3 +107,18 @@ body { background: #FAF9F6; font-family: 'DM Sans', sans-serif; }
   .cluster-stats { flex-direction: row; min-width: unset; }
   .results-header { padding: 16px; }
 }
+.cache-info { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 16px; font-size: 12px; color: #666; }
+.metrics-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cluster-main { min-width: 0; }
+.comment-order { display: flex; flex-wrap: wrap; gap: 6px; }
+.comment-order button, .show-comments { font: inherit; font-size: 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; color: #444; cursor: pointer; padding: 8px 10px; }
+.comment-order button[aria-pressed="true"] { background: #2d2d2d; border-color: #2d2d2d; color: #fff; }
+.comment-order button:focus-visible, .show-comments:focus-visible, .new-analysis-btn:focus-visible { outline: 2px solid #E8645A; outline-offset: 3px; }
+.comment-help { font-size: 12px; color: #666; line-height: 1.6; margin: 10px 0; }
+.comment-list { list-style: none; padding: 0; }
+.comment-item { padding: 12px 0; border-bottom: 1px solid #eee; overflow-wrap: anywhere; }
+.comment-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; color: #666; font-size: 12px; margin-top: 6px; }
+.representative-badge { display: inline-block; background: #fff0e9; color: #9a4526; border-radius: 5px; padding: 3px 6px; font-size: 11px; margin-bottom: 6px; }
+.show-comments { margin: 12px 8px 0 0; }
+@media (max-width: 800px) { .metrics-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .metric-card { padding: 16px; } }
+@media (max-width: 600px) { .metrics-row { grid-template-columns: 1fr; } .url-input { min-width: 0; } .input-card { padding: 16px; } .analyze-btn { padding: 12px; } }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
 import './App.css'
+import ClusterComments from './components/ClusterComments'
 // Keep the previous variable working for existing deployments.
 const API_URL = (
   import.meta.env.VITE_API_BASE_URL?.trim() ||
@@ -60,10 +61,9 @@ export default function App() {
   const [results, setResults] = useState(null)
   const [error, setError] = useState(null)
 
-  const analyze = async () => {
+  const analyze = async (refresh = false) => {
     if (!url.trim()) return
     setError(null)
-    setResults(null)
     setLoading(true)
     setLoadingStep(0)
     setLoadingProgress(0)
@@ -83,13 +83,14 @@ export default function App() {
     }, 9000)
 
     try {
-      const response = await axios.post(`${API_URL}/api/analyze/`, { url });
+      const response = await axios.post(`${API_URL}/api/analyze/`, { url, refresh });
       setLoadingProgress(100)
       setTimeout(() => {
         setResults(response.data)
         setLoading(false)
       }, 400)
     } catch (err) {
+      if (err.response?.status === 400) setResults(null)
       setError(err.response?.data?.error || 'Backend requires local setup. See README for instructions.')
       setLoading(false)
     } finally {
@@ -111,7 +112,7 @@ export default function App() {
               <em className="hero-em">really</em> saying?
             </h1>
             <p className="hero-sub">
-              Paste any YouTube URL. We'll read every comment so you don't have to —
+              Paste a YouTube URL. We’ll analyse a sample of its comments
               and surface exactly what your audience wants next.
             </p>
 
@@ -128,7 +129,7 @@ export default function App() {
                   onChange={e => setUrl(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && analyze()}
                 />
-                <button className="analyze-btn" onClick={analyze}>
+                <button className="analyze-btn" onClick={() => analyze()}>
                   Analyse
                 </button>
               </div>
@@ -137,13 +138,13 @@ export default function App() {
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path d="M6 1a5 5 0 100 10A5 5 0 006 1zm0 2a.75.75 0 110 1.5A.75.75 0 016 3zm0 2.5a.5.5 0 01.5.5v3a.5.5 0 01-1 0V6a.5.5 0 01.5-.5z" fill="#999"/>
                 </svg>
-                Your data is private and never stored
+                Public comments and embeddings are saved for faster repeat analysis.
               </p>
             </div>
 
             <div className="stats-row">
               <div className="stat">
-                <span className="stat-num">100+</span>
+                <span className="stat-num">Up to 50</span>
                 <span className="stat-label">Comments analysed</span>
               </div>
               <div className="stat-divider"/>
@@ -230,7 +231,7 @@ export default function App() {
         <Brand />
         <button
           className="new-analysis-btn"
-          onClick={() => { setResults(null); setUrl('') }}
+          onClick={() => { setResults(null); setUrl(''); setError(null) }}
         >
           + New analysis
         </button>
@@ -240,10 +241,17 @@ export default function App() {
         <div className="video-info">
           <p className="eyebrow">Analysis complete</p>
           <h2 className="video-title">{results.video_title}</h2>
+          <div className="cache-info">
+            <p>{results.cached ? 'Saved analysis' : 'Analysis updated'} · Last fetched{' '}
+              <time dateTime={results.fetched_at}>{new Date(results.fetched_at).toLocaleString()}</time>
+            </p>
+            <button className="new-analysis-btn" onClick={() => analyze(true)}>Refresh comments</button>
+          </div>
+          {error && <p className="error-msg" role="alert">Refresh failed: {error} Your previous results are still shown.</p>}
         </div>
 
         {/* IMPROVEMENT #4: Balanced 4-Card Performance Dashboard Layout */}
-        <div className="metrics-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
+        <div className="metrics-row">
           <div className="metric-card">
             <div className="metric-icon">💬</div>
             <div>
@@ -287,8 +295,9 @@ export default function App() {
             <h3 className="section-title">Top Audience Signals</h3>
           </div>
 
+          {results.clusters.length === 0 && <p className="comment-help">No clear topics were found in this sample. Try another video or refresh its comments.</p>}
           <div className="clusters-list">
-            {results.clusters.slice(0, 5).map((cluster, idx) => {
+            {results.clusters.map((cluster, idx) => {
               const color = CLUSTER_COLORS[idx % CLUSTER_COLORS.length]
               const engagement = getEngagement(cluster.avg_likes)
 
@@ -325,15 +334,10 @@ export default function App() {
                         {cluster.size} comments in this topic cluster
                       </p>
 
-                      <div className="rep-comments">
-                        <p className="rep-label">Representative comments</p>
-                        {cluster.top_comments.map((comment, i) => (
-                          <div key={i} className="rep-comment">
-                            <span className="rep-quote">"</span>
-                            <span className="rep-text">{comment}</span>
-                          </div>
-                        ))}
-                      </div>
+                      <ClusterComments
+                        key={`${results.analysis_id}-${cluster.cluster_id}`}
+                        comments={cluster.comments || []}
+                      />
                     </div>
 
                     <div className="cluster-stats">

@@ -71,7 +71,8 @@ def label_clusters(clusters, total_comments):
         norms = np.where(norms == 0, 1e-9, norms) 
         similarities = dot_products / norms
         
-        closest_indices = np.argsort(similarities)[::-1]
+        closest_indices = sorted(range(len(cluster_comments)), key=lambda idx: (
+            -float(similarities[idx]), cluster_comments[idx]['comment_id']))
         representative_comments = [cluster_comments[idx]["text"] for idx in closest_indices[:3]]
         
         # --- IMPROVEMENT #3: Word-Frequency Topic Labeler ---
@@ -100,6 +101,9 @@ def label_clusters(clusters, total_comments):
             "percentage": percentage,
             "avg_likes": round(avg_likes, 1),
             "top_comments": representative_comments,
+            "comments": [dict(
+                cluster_comments[idx], similarity=float(similarities[idx])
+            ) for idx in closest_indices],
         })
         
     # --- IMPROVEMENT #5: Smart Impact Score Metric Sorting ---

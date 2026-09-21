@@ -1,6 +1,8 @@
 import re
 import html
 
+CLEANING_VERSION = '1'
+
 def clean_comments(comments):
     cleaned = []
     
@@ -42,6 +44,7 @@ def clean_comments(comments):
             continue
 
         cleaned.append({
+            "comment_id": c["comment_id"],
             "text": display_text,       # URL-free sanitized presentation text
             "search_text": ai_text,      
             "likes": c["likes"],

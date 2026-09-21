@@ -1,54 +1,46 @@
 import json
+import logging
+from django.db import OperationalError
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from googleapiclient.errors import HttpError
 
-from pipeline.main import get_comments
-from pipeline.cleaner import clean_comments
-from pipeline.embedder import get_embeddings
-from pipeline.clusterer import cluster_comments, label_clusters
+from pipeline.main import extract_video_id
+from .models import Video
+from .services import analyze_video, InsufficientComments
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
 def analyze(request):
-    url = request.data.get('url')
-
-    if not url:
-        return Response({'error': 'URL is required'}, status=400)
-
+    if not isinstance(request.data, dict):
+        return Response({'error': 'Send a JSON object containing url.'}, status=400)
     try:
-        raw_comments = get_comments(url, max_comments=50)
-
-        if len(raw_comments) < 10:
-            return Response({'error': 'Not enough comments to analyze'}, status=400)
-
-        cleaned = clean_comments(raw_comments)
-        
-        if len(cleaned) < 5:
-            return Response({'error': 'Not enough meaningful comments after cleaning'}, status=400)
-
-        embeddings = get_embeddings(cleaned)
-        clusters = cluster_comments(embeddings, cleaned)
-        labelled = label_clusters(clusters, len(cleaned))
-
-        return Response({
-            'video_title': raw_comments[0].get('video_title', 'Unknown'),
-            'total_comments_fetched': len(raw_comments),
-            'total_after_cleaning': len(cleaned),
-            'clusters': labelled
-        })
-
-    except HttpError as e:
+        video_id = extract_video_id(request.data.get('url'))
+    except ValueError as error:
+        return Response({'error': str(error)}, status=400)
+    refresh = request.data.get('refresh', False)
+    if not isinstance(refresh, bool):
+        return Response({'error': 'refresh must be a boolean.'}, status=400)
+    try:
+        return Response(analyze_video(video_id, refresh=refresh))
+    except InsufficientComments as error:
+        return Response({'error': str(error)}, status=400)
+    except HttpError as error:
         try:
-            content = json.loads(e.content)
-            reason = content['error']['errors'][0]['reason']
-            if reason == 'commentsDisabled':
-                return Response({'error': 'Comments are disabled on this video.'}, status=400)
-            elif reason == 'quotaExceeded':
-                return Response({'error': 'YouTube quota exceeded. Try again tomorrow.'}, status=503)
-        except:
-            pass
-        return Response({'error': 'YouTube API error.'}, status=500)
-
-    except Exception as e:
-        return Response({'error': str(e)}, status=500)
+            reason = json.loads(error.content)['error']['errors'][0]['reason']
+        except (ValueError, KeyError, IndexError, TypeError):
+            reason = ''
+        if reason in ('commentsDisabled', 'videoNotFound'):
+            Video.objects.filter(pk=video_id).delete()
+            return Response({'error': 'Video unavailable or comments disabled.'}, status=400)
+        if reason == 'quotaExceeded':
+            return Response({'error': 'YouTube quota exceeded. Try again tomorrow.'}, status=503)
+        return Response({'error': 'YouTube API error. Check backend credentials and restrictions.'}, status=502)
+    except OperationalError:
+        return Response({'error': 'Database unavailable or busy. Run migrations or retry shortly.'}, status=503)
+    except Exception:
+        # Do not return exception strings that could contain credentials or request URLs.
+        logger.error('Video analysis failed for %s', video_id)
+        return Response({'error': 'Analysis failed. Check backend configuration and model availability.'}, status=500)

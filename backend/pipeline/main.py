@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
+import re
+from urllib.parse import urlparse, parse_qs
 
 # explicitly load .env from backend/ folder regardless of where script runs from
 load_dotenv(Path(__file__).resolve().parent.parent / '.env')
@@ -13,6 +15,29 @@ if not API_KEY:
     warnings.warn("YOUTUBE_API_KEY not found. YouTube features will not work.")
 
 
+def extract_video_id(value):
+    if not isinstance(value, str):
+        raise ValueError('Enter a valid YouTube video URL or ID.')
+    value = value.strip()
+    if re.fullmatch(r'[a-zA-Z0-9_-]{11}', value):
+        return value
+    parsed = urlparse(value if '://' in value else 'https://' + value)
+    host = (parsed.hostname or '').lower()
+    parts = parsed.path.strip('/').split('/')
+    video_id = ''
+    if parsed.scheme in ('http', 'https'):
+        if host in ('youtu.be', 'www.youtu.be'):
+            video_id = parts[0]
+        elif host in ('youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'):
+            if parsed.path == '/watch':
+                video_id = parse_qs(parsed.query).get('v', [''])[0]
+            elif len(parts) == 2 and parts[0] in ('shorts', 'embed', 'live'):
+                video_id = parts[1]
+    if not re.fullmatch(r'[a-zA-Z0-9_-]{11}', video_id):
+        raise ValueError('Enter a valid YouTube video URL or ID.')
+    return video_id
+
+
 def get_comments(video_id_or_url, max_comments=100):
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
@@ -20,13 +45,7 @@ def get_comments(video_id_or_url, max_comments=100):
 
     youtube = build("youtube", "v3", developerKey=api_key)
 
-    # extract video ID if full URL passed
-    if "youtube.com" in video_id_or_url or "youtu.be" in video_id_or_url:
-        import re
-        match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", video_id_or_url)
-        video_id = match.group(1) if match else video_id_or_url
-    else:
-        video_id = video_id_or_url
+    video_id = extract_video_id(video_id_or_url)
 
     # get video title
     video_response = youtube.videos().list(
@@ -49,6 +68,8 @@ def get_comments(video_id_or_url, max_comments=100):
         for item in response["items"]:
             snippet = item["snippet"]["topLevelComment"]["snippet"]
             comments.append({
+                "comment_id": item["snippet"]["topLevelComment"]["id"],
+                "updated_at": snippet.get("updatedAt", ""),
                 "text": snippet["textDisplay"],
                 "likes": snippet["likeCount"],
                 "author": snippet["authorDisplayName"],

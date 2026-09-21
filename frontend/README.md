@@ -23,6 +23,7 @@ variable before building and rebuild after changes. Every `VITE_` variable is
 public browser configuration: never add YouTube keys or other secrets here.
 
 ```sh
+npm test
 npm run lint
 npm run build
 npm run preview -- --port 4173 --strictPort
@@ -33,3 +34,10 @@ requires a running backend. Preview is for checking a build locally.
 
 See the [repository setup guide](../README.md) for backend installation,
 YouTube credentials, environment variables, and troubleshooting.
+
+Each topic has Most representative / Most liked controls. Comments show author
+and likes; Show more reveals additional members without another API call. The
+representative view starts with the closest comment plus five neighbours; the
+likes view starts with five. Last fetched identifies the saved snapshot, and
+Refresh comments explicitly fetches updated data. The database cache is shared
+by users of this backend; see the root README for expiry and persistence.

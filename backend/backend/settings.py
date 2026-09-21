@@ -99,3 +99,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://comment-lens-alpha.vercel.app",
     "https://commentlens-2uqw.onrender.com",
 ]
+# Fresh analysis results may be reused for one day. Raw API data is purged after 29 days.
+ANALYSIS_CACHE_TTL_SECONDS = int(os.getenv('ANALYSIS_CACHE_TTL_SECONDS', '86400'))
+if not 0 <= ANALYSIS_CACHE_TTL_SECONDS < 29 * 24 * 60 * 60:
+    raise ImproperlyConfigured('ANALYSIS_CACHE_TTL_SECONDS must be between 0 and 2505599.')
