@@ -65,6 +65,24 @@ describe('cluster comments', () => {
 })
 
 describe('analysis integration', () => {
+  it('retries opinion analysis without forcing a comment refresh', async () => {
+    const user = userEvent.setup()
+    const signals = { sentiment: { positive: .7, neutral: .2, negative: .1 } }
+    axios.post.mockResolvedValueOnce({ data: { ...result, decisions: {
+      status: 'partial', provider: 'kev', total: 12, summary: { count: 1, signals },
+      error: 'Server unavailable.',
+    } } }).mockResolvedValueOnce({ data: { ...result, decisions: {
+      status: 'complete', provider: 'kev', total: 12, summary: { count: 12, signals },
+    } } })
+    render(<App />)
+    await user.type(screen.getByPlaceholderText('Paste a YouTube video URL...'), 'https://youtu.be/abcdefghijk')
+    await user.click(screen.getByRole('button', { name: 'Analyse' }))
+    await user.click(await screen.findByRole('button', { name: 'Retry opinion analysis' }))
+    expect(await screen.findByText(/12 of 12 sampled comments/)).toBeTruthy()
+    expect(axios.post.mock.calls[1][1]).toEqual({ url: 'https://youtu.be/abcdefghijk', refresh: false })
+    expect(screen.getByText('Topic: Tutorial')).toBeTruthy()
+  })
+
   it('shows saved state, sends explicit refresh, and retains results on failure', async () => {
     const user = userEvent.setup()
     axios.post.mockResolvedValueOnce({ data: result }).mockRejectedValueOnce({

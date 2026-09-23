@@ -31,7 +31,7 @@ def embed(comments):
     return vectors
 
 
-@override_settings(ANALYSIS_CACHE_TTL_SECONDS=86400)
+@override_settings(ANALYSIS_CACHE_TTL_SECONDS=86400, DECISION_PROVIDER='disabled')
 class CacheTests(TestCase):
     def setUp(self):
         self.raw = sample_comments()

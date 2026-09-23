@@ -103,3 +103,24 @@ CSRF_TRUSTED_ORIGINS = [
 ANALYSIS_CACHE_TTL_SECONDS = int(os.getenv('ANALYSIS_CACHE_TTL_SECONDS', '86400'))
 if not 0 <= ANALYSIS_CACHE_TTL_SECONDS < 29 * 24 * 60 * 60:
     raise ImproperlyConfigured('ANALYSIS_CACHE_TTL_SECONDS must be between 0 and 2505599.')
+
+# The provider is opt-in. A host change never requires application code changes.
+DECISION_PROVIDER = os.getenv('DECISION_PROVIDER', 'disabled').strip().lower()
+KEV_BASE_URL = os.getenv('KEV_BASE_URL', '').strip().rstrip('/')
+KEV_MODEL = os.getenv('KEV_MODEL', 'kev-latest').strip()
+KEV_MODEL_VERSION = os.getenv('KEV_MODEL_VERSION', '1').strip()
+KEV_API_KEY = os.getenv('KEV_API_KEY', '').strip()
+KEV_TIMEOUT = float(os.getenv('KEV_TIMEOUT', '30'))
+KEV_ANALYSIS_BUDGET = float(os.getenv('KEV_ANALYSIS_BUDGET', '120'))
+if DECISION_PROVIDER not in ('disabled', 'kev', 'mock'):
+    raise ImproperlyConfigured('DECISION_PROVIDER must be disabled, kev, or mock.')
+if not (0 < KEV_TIMEOUT <= 120 and 0 < KEV_ANALYSIS_BUDGET <= 600):
+    raise ImproperlyConfigured('KEV_TIMEOUT must be 0–120 seconds and KEV_ANALYSIS_BUDGET 0–600 seconds, exclusive of zero.')
+if DECISION_PROVIDER == 'kev':
+    from urllib.parse import urlsplit
+    endpoint = urlsplit(KEV_BASE_URL)
+    if (endpoint.scheme not in ('http', 'https') or not endpoint.hostname
+            or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment):
+        raise ImproperlyConfigured('Set KEV_BASE_URL to an HTTP(S) server URL without credentials, query, or fragment.')
+    if not KEV_MODEL:
+        raise ImproperlyConfigured('KEV_MODEL cannot be empty.')

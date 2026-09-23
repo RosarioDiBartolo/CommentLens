@@ -264,7 +264,71 @@ include a real UMAP/HDBSCAN smoke test. Frontend tests cover ordering, displayed
 metadata, pagination, cache state, and refresh failure handling. UMAP 0.5.3 still
 imports `pkg_resources`, so the dependency file pins compatible setuptools.
 
-## Processing details
+## Kev opinion analysis
+
+CommentLens can run a second, independent decision pipeline on **all fetched
+top-level comments**, including those excluded by the topic cleaner. It asks four
+questions per comment: sentiment (positive/neutral/negative), explicit stance
+(agrees/mixed/disagrees/unclear), genuine question (yes/no), and toxicity
+(low/medium/high). Only the video title and comment are supplied; stance is not
+fact checking or a comparison with a transcript. Questions live centrally in
+`backend/pipeline/decision_analysis.py`.
+
+Apply the database migration with `python manage.py migrate`, then add to
+`backend/.env` and restart Django:
+
+```dotenv
+DECISION_PROVIDER=kev
+KEV_BASE_URL=https://your-current-tunnel-or-server
+KEV_MODEL=kev-latest
+KEV_MODEL_VERSION=1
+KEV_API_KEY=
+KEV_TIMEOUT=30
+KEV_ANALYSIS_BUDGET=120
+```
+
+Use the same server origin you checked in `backend/test.py`, without `/v1/models`.
+The client posts to `/v1/systemone` using Kev's
+[documented API](https://github.com/jaredpalmer/kev#api). An optional API key is sent
+as a bearer token. Hosting changes require only `KEV_BASE_URL`; model checkpoint
+changes behind an unchanged alias require bumping `KEV_MODEL_VERSION`. Keys remain
+on the backend. No Kaggle-specific logic or inference model installation is needed
+in CommentLens. `DecisionModel` defines the provider boundary; other providers can
+return the same normalized answer format.
+
+The default `DECISION_PROVIDER=disabled` preserves topic-only operation. Use
+`DECISION_PROVIDER=mock` for offline development with fixed, explicitly labelled
+demo probabilities. Demo fixtures never silently replace failed real inference.
+
+The dashboard shows overall probabilities, per-topic summaries, and expandable
+per-comment distributions. Percentages are the **mean model probabilities over
+successfully classified comments**, with no likes weighting; they are not measured
+viewer shares. Coverage is displayed. These experimental signals need evaluation
+against manually labelled comments before interpreting them as reliable audience
+measurements. The existing filtering metric is a heuristic, not model spam detection.
+
+Results are stored in `Analysis.decision_data` and cascade with the video cache.
+They are reused by comment ID, exact input text/title, provider/model identity and
+question definitions. Changed text is reclassified; likes-only refreshes reuse
+answers. Opinion settings do not invalidate embeddings or topic clusters.
+`POST /api/analyze/` adds `decisions` with status, provider, model, coverage,
+per-comment answers and summary. Each cluster adds `decision_summary`; classified
+cluster comments add `decisions`. Existing response fields are preserved.
+
+Inference remains synchronous and sequential. Requests time out after
+`KEV_TIMEOUT` seconds (maximum 120); the pipeline stops starting requests when its
+`KEV_ANALYSIS_BUDGET` (maximum 600 seconds) expires or after the first server error.
+The HTTP timeout limits socket inactivity rather than providing a strict total
+wall-clock deadline. Size deployment/proxy timeouts accordingly. Partial results
+are saved and topic results remain available. **Retry opinion analysis** resubmits
+the video without forcing a YouTube refresh and completes missing answers while
+the comment cache is fresh. A stale cache follows the normal YouTube refresh rules.
+
+Tests cover the HTTP contract, malformed probabilities, safe errors, deadlines,
+offline mode, partial retries, persistence, cache invalidation, topic summaries,
+and dashboard states. Run the backend and frontend verification commands above.
+
+## Topic processing details
 
 The existing pipeline keeps display text separate from normalized embedding
 text. It removes markup, links, common engagement spam, and comments with fewer

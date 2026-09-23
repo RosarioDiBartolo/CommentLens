@@ -13,6 +13,7 @@ from pipeline.cleaner import CLEANING_VERSION, clean_comments
 from pipeline.embedder import MODEL_VERSION, get_embeddings
 from pipeline.clusterer import cluster_comments, label_clusters
 from pipeline.main import get_comments
+from pipeline.decision_analysis import analyze_decisions, summarize
 from .models import Video, Comment, Embedding, Analysis, Cluster, ClusterMembership
 
 MAX_COMMENTS = 50
@@ -76,6 +77,35 @@ def serialize(analysis, cached):
 
 
 def analyze_video(video_id, refresh=False):
+    previous = Analysis.objects.filter(video_id=video_id).values_list('decision_data', flat=True).first()
+    result = analyze_semantics(video_id, refresh)
+    # Capture comments from exactly the semantic snapshot returned above. Inference
+    # runs outside the transaction; a concurrent replacement cannot receive our data.
+    with transaction.atomic():
+        current = Analysis.objects.select_related('video').filter(pk=result['analysis_id']).first()
+        if current is None:
+            result['decisions'] = {'status': 'unavailable', 'error': 'Comments changed during analysis. Retry.',
+                                   'summary': summarize([]), 'comments': []}
+            return result
+        comments = list(current.video.comments.order_by('youtube_id').values('youtube_id', 'text'))
+        raw = [{'comment_id': c['youtube_id'], 'text': c['text']} for c in comments]
+        previous = current.decision_data or previous
+    decisions = analyze_decisions(raw, result['video_title'], previous)
+    Analysis.objects.filter(pk=result['analysis_id']).update(decision_data=decisions)
+    result['decisions'] = decisions
+    by_id = {row['comment_id']: row for row in decisions['comments']}
+    for cluster in result['clusters']:
+        rows = []
+        for comment in cluster['comments']:
+            row = by_id.get(comment['comment_id'])
+            if row:
+                comment['decisions'] = row['answers']
+                rows.append(row)
+        cluster['decision_summary'] = summarize(rows)
+    return result
+
+
+def analyze_semantics(video_id, refresh=False):
     purge_expired()
     now = timezone.now()
     ttl = timedelta(seconds=settings.ANALYSIS_CACHE_TTL_SECONDS)

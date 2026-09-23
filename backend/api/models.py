@@ -37,6 +37,7 @@ class Analysis(models.Model):
     completed_at = models.DateTimeField()
     total_fetched = models.PositiveIntegerField()
     total_cleaned = models.PositiveIntegerField()
+    decision_data = models.JSONField(default=dict, blank=True)
 
 
 class Cluster(models.Model):

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CommentDecisions } from './DecisionSignals'
 
 export default function ClusterComments({ comments }) {
   const [order, setOrder] = useState('representative')
@@ -40,6 +41,7 @@ export default function ClusterComments({ comments }) {
               <span aria-label={`${comment.likes} likes`}>♥ {comment.likes.toLocaleString()}</span>
 
             </div>
+            <CommentDecisions answers={comment.decisions} />
           </li>
         ))}
       </ol>

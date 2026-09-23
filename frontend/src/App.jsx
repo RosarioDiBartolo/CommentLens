@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import './App.css'
 import ClusterComments from './components/ClusterComments'
+import DecisionSignals, { SignalSummary } from './components/DecisionSignals'
 // Keep the previous variable working for existing deployments.
 const API_URL = (
   import.meta.env.VITE_API_BASE_URL?.trim() ||
@@ -14,6 +15,7 @@ const LOADING_STEPS = [
   'Filtering repetitive comments...',
   'Mapping semantic similarity...',
   'Discovering recurring themes...',
+  'Evaluating audience opinion signals...',
 ]
 
 const CLUSTER_COLORS = [
@@ -212,7 +214,7 @@ export default function App() {
               <span className="progress-text">{loadingProgress}%</span>
             </div>
 
-            <p className="loading-note">This usually takes 30–60 seconds</p>
+            <p className="loading-note">Opinion analysis can take a few minutes when enabled.</p>
           </div>
         </div>
       </div>
@@ -257,7 +259,7 @@ export default function App() {
             <div>
               <p className="metric-num">{totalFetched}</p>
               <p className="metric-label">Total Comments</p>
-              <p className="metric-sub">100% analysed</p>
+              <p className="metric-sub">Sampled from this video</p>
             </div>
           </div>
           
@@ -265,7 +267,7 @@ export default function App() {
             <div className="metric-icon">🛡️</div>
             <div>
               <p className="metric-num">{spamFiltered}</p>
-              <p className="metric-label">Spam Shielded</p>
+              <p className="metric-label">Filtered Comments</p>
               <p className="metric-sub">{spamPercentage}% noise filtered</p>
             </div>
           </div>
@@ -275,7 +277,7 @@ export default function App() {
             <div>
               <p className="metric-num">{totalCleaned}</p>
               <p className="metric-label">Signal Comments</p>
-              <p className="metric-sub">Pure intent subset</p>
+              <p className="metric-sub">Used for topic discovery</p>
             </div>
           </div>
 
@@ -288,6 +290,8 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        <DecisionSignals decisions={results.decisions} onRetry={() => analyze()} />
 
         <div className="clusters-section">
           <div className="section-header">
@@ -338,6 +342,10 @@ export default function App() {
                         key={`${results.analysis_id}-${cluster.cluster_id}`}
                         comments={cluster.comments || []}
                       />
+                      {cluster.decision_summary?.count > 0 && <details className="topic-decisions">
+                        <summary>Opinion signals for this topic ({cluster.decision_summary.count}/{cluster.size} comments)</summary>
+                        <SignalSummary summary={cluster.decision_summary} />
+                      </details>}
                     </div>
 
                     <div className="cluster-stats">
