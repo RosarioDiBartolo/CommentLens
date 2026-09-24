@@ -1,4 +1,15 @@
+import uuid
 from django.db import models
+
+
+class AnalysisRun(models.Model):
+    """Immutable input snapshot shared by independent topic/opinion requests."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    video_id = models.CharField(max_length=11, db_index=True)
+    video_title = models.TextField()
+    fetched_at = models.DateTimeField(db_index=True)
+    comments = models.JSONField()
+    opinion_data = models.JSONField(default=dict, blank=True)
 
 class Video(models.Model):
     youtube_id = models.CharField(max_length=11, primary_key=True)

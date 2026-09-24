@@ -25,7 +25,7 @@ export function CommentDecisions({ answers }: { answers?: Answers }) {
   </details>
 }
 
-export default function DecisionSignals({ decisions, onRetry }: { decisions?: Decisions; onRetry?: () => void }) {
+export default function DecisionSignals({ decisions, onRetry, retryDisabled = false }: { decisions?: Decisions; onRetry?: () => void; retryDisabled?: boolean }) {
   if (!decisions) return null
   if (decisions.status === 'disabled') return <section className={styles['decision-panel']}>
     <h3>Audience opinion signals</h3>
@@ -38,8 +38,8 @@ export default function DecisionSignals({ decisions, onRetry }: { decisions?: De
     <p className={styles['comment-help']}>{decisions.summary.count} of {decisions.total ?? 0} sampled comments classified.
       {' '}Percentages are average model probabilities, not measured audience shares.
       {' '}Stance uses explicit agreement in the comment; the video transcript is not available.</p>
-    {incomplete && <div role="status"><p>{decisions.error || 'Opinion analysis is incomplete.'} Topic results remain available.</p>
-      <button className={styles['show-comments']} onClick={onRetry}>Retry opinion analysis</button></div>}
+    {incomplete && <div role="status"><p>{decisions.error || 'Opinion analysis is incomplete.'} Completed opinion results remain available.</p>
+      {onRetry && <button className={styles['show-comments']} disabled={retryDisabled} onClick={onRetry}>Retry opinion analysis</button>}</div>}
     <SignalSummary summary={decisions.summary} />
   </section>
 }

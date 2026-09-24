@@ -64,63 +64,50 @@ describe('cluster comments', () => {
   })
 })
 
-describe('analysis integration', () => {
-  it('retries opinion analysis without forcing a comment refresh', async () => {
-    const user = userEvent.setup()
-    const signals = { sentiment: { positive: .7, neutral: .2, negative: .1 } }
-    axios.post.mockResolvedValueOnce({ data: { ...result, decisions: {
-      status: 'partial', provider: 'kev', total: 12, summary: { count: 1, signals },
-      error: 'Server unavailable.',
-    } } }).mockResolvedValueOnce({ data: { ...result, decisions: {
-      status: 'complete', provider: 'kev', total: 12, summary: { count: 12, signals },
-    } } })
-    render(<App />)
-    await user.type(screen.getByPlaceholderText('Paste a YouTube video URL...'), 'https://youtu.be/abcdefghijk')
-    await user.click(screen.getByRole('button', { name: 'Analyse' }))
-    await user.click(await screen.findByRole('button', { name: 'Retry opinion analysis' }))
-    expect(await screen.findByText(/12 of 12 sampled comments/)).toBeTruthy()
-    expect(axios.post.mock.calls[1][1]).toEqual({ url: 'https://youtu.be/abcdefghijk', refresh: false })
-    expect(screen.getByText('Topic: Tutorial')).toBeTruthy()
+const runId = '123e4567-e89b-42d3-a456-426614174000'
+const snapshot = { run_id: runId, video_id: result.video_id, video_title: result.video_title,
+  fetched_at: result.fetched_at, total_comments_fetched: 12, cached: true }
+const disabled = { decisions: { status: 'disabled', summary: { count: 0 }, comments: [] } }
+function mockFlow(topicResult = result) {
+  axios.post.mockImplementation(async (path, payload) => {
+    if (path.endsWith('/runs/')) {
+      if (payload.refresh) throw { response: { data: { error: 'YouTube quota exceeded.' } } }
+      return { data: snapshot }
+    }
+    return { data: path.endsWith('/topics/') ? topicResult : disabled }
   })
+}
+async function submit() {
+  const user = userEvent.setup()
+  render(<App />)
+  await user.type(screen.getByRole('textbox'), 'https://youtu.be/abcdefghijk')
+  await user.click(screen.getByRole('button', { name: 'Analyse' }))
+  return user
+}
 
-  it('shows saved state, sends explicit refresh, and retains results on failure', async () => {
-    const user = userEvent.setup()
-    axios.post.mockResolvedValueOnce({ data: result }).mockRejectedValueOnce({
-      response: { data: { error: 'YouTube quota exceeded.' } },
-    })
-    render(<App />)
-    await user.type(screen.getByPlaceholderText('Paste a YouTube video URL...'), 'https://youtu.be/abcdefghijk')
-    await user.click(screen.getByRole('button', { name: 'Analyse' }))
-    expect(await screen.findByText('Saved tutorial')).toBeTruthy()
-    expect(screen.getByText(/Saved analysis/)).toBeTruthy()
-    expect(axios.post.mock.calls[0][1]).toEqual({ url: 'https://youtu.be/abcdefghijk', refresh: false })
-    await user.click(screen.getByRole('button', { name: 'Most liked' }))
-    expect(axios.post).toHaveBeenCalledTimes(1)
-    await user.click(screen.getByRole('button', { name: 'Refresh comments' }))
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('YouTube quota exceeded'))
-    expect(screen.getByText('Saved tutorial')).toBeTruthy()
-    expect(axios.post.mock.calls[1][1].refresh).toBe(true)
-  })
-
-  it('renders an explicit empty state', async () => {
-    const user = userEvent.setup()
-    axios.post.mockResolvedValueOnce({ data: { ...result, clusters: [] } })
-    render(<App />)
-    await user.type(screen.getByPlaceholderText('Paste a YouTube video URL...'), 'abcdefghijk')
-    await user.click(screen.getByRole('button', { name: 'Analyse' }))
-    expect(await screen.findByText(/No clear topics/)).toBeTruthy()
-  })
+it('shows independent panels and retains results on failed comment refresh', async () => {
+  mockFlow()
+  const user = await submit()
+  expect(await screen.findByText('Topic: Tutorial')).toBeTruthy()
+  expect(screen.getByRole('region', { name: 'Topic discovery' })).toBeTruthy()
+  expect(screen.getByRole('region', { name: 'Opinion analysis' })).toBeTruthy()
+  expect(screen.queryByRole('progressbar')).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Refresh comments' }))
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('YouTube quota exceeded'))
+  expect(screen.getByText('Topic: Tutorial')).toBeTruthy()
+  expect(axios.post.mock.calls.filter(([path]) => path.endsWith('/topics/'))).toHaveLength(1)
+  expect(axios.post.mock.calls.filter(([path]) => path.endsWith('/opinions/'))).toHaveLength(1)
 })
 
-
-it('shows every cluster, including those beyond the first five', async () => {
-  const user = userEvent.setup()
-  axios.post.mockResolvedValueOnce({ data: { ...result, clusters: Array.from({ length: 7 }, (_, i) => ({
+it('shows empty topics and every cluster without truncating the result', async () => {
+  mockFlow({ ...result, clusters: [] })
+  const user = await submit()
+  expect(await screen.findByText(/No clear topics/)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: '+ New analysis' }))
+  mockFlow({ ...result, clusters: Array.from({ length: 7 }, (_, i) => ({
     ...result.clusters[0], cluster_id: i + 1, title: `Topic number ${i + 1}`,
-  })) } })
-  render(<App />)
-  await user.type(screen.getByPlaceholderText('Paste a YouTube video URL...'), 'abcdefghijk')
+  })) })
+  await user.type(screen.getByRole('textbox'), 'abcdefghijk')
   await user.click(screen.getByRole('button', { name: 'Analyse' }))
   expect(await screen.findByText('Topic number 7')).toBeTruthy()
-  expect(screen.getAllByRole('group', { name: 'Comment order' })).toHaveLength(7)
 })

@@ -374,3 +374,18 @@ and a title derived from frequent words.
   API requires at least 10 fetched comments and five after cleaning. Sparse
   samples can still produce no clusters; the frontend does not analyze replies
   or every comment on a large video.
+
+
+### Independent analysis workspace
+
+The frontend opens the workspace immediately after submission, with separate
+panels for topic discovery and opinion analysis. After a shared comment fetch,
+both requests run independently. Each has its own loading/error/retry state;
+there is no simulated progress bar. See [frontend architecture](frontend/README.md#architecture).
+
+The backend adds `POST /api/runs/` (`url`, optional `refresh`) to prepare a saved
+snapshot, and `POST /api/runs/<run_id>/topics/` and `/opinions/` to process it.
+Run `python manage.py migrate` when updating an existing installation (migration
+0003). The old combined analysis endpoint remains compatible. Use concurrent
+Django workers/threads in production to allow both requests to run simultaneously.
+Snapshot records are purged by the existing retention command after 29 days.

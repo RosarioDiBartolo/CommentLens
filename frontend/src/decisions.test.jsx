@@ -25,7 +25,7 @@ it('provides retry for partial inference without hiding completed signals', asyn
   const retry = vi.fn()
   render(<DecisionSignals decisions={{ status: 'partial', provider: 'kev', total: 3,
     summary, error: 'Server unavailable.' }} onRetry={retry} />)
-  expect(screen.getByRole('status').textContent).toContain('Topic results remain available')
+  expect(screen.getByRole('status').textContent).toContain('Completed opinion results remain available')
   expect(screen.getByText('90%')).toBeTruthy()
   await userEvent.click(screen.getByRole('button', { name: 'Retry opinion analysis' }))
   expect(retry).toHaveBeenCalledTimes(1)

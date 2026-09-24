@@ -1,42 +1,38 @@
-import { useEffect, useRef, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { AnalysisError, analyzeVideo } from './api'
-import type { Analysis, AnalysisRequest } from './model'
+import { useState } from 'react'
+import { prepareAnalysis, analyzeTopics, analyzeOpinions } from './api'
+import { useAnalysisTask } from './useAnalysisTask'
 
 export function useAnalysis() {
-  // The last successful result survives refresh errors; mutation.data does not.
-  const [results, setResults] = useState<Analysis | null>(null)
-  const request = useRef<AbortController | null>(null)
-  const mutation = useMutation({
-    mutationFn: async (variables: AnalysisRequest & { controller: AbortController }) => {
-      const { controller, ...payload } = variables
-      try { return await analyzeVideo(payload, controller.signal) }
-      finally { if (request.current === controller) request.current = null }
-    },
-    retry: false,
-    gcTime: 0,
-    onSuccess: (data, variables) => {
-      if (!variables.controller.signal.aborted) setResults(data)
-    },
-    onError: (error, variables) => {
-      if (!variables.controller.signal.aborted && error instanceof AnalysisError && error.status === 400) setResults(null)
-    },
-  })
-  useEffect(() => () => { request.current?.abort() }, [])
+  const [url, setUrl] = useState<string | null>(null)
+  const preparation = useAnalysisTask(prepareAnalysis)
+  const topics = useAnalysisTask(analyzeTopics)
+  const opinions = useAnalysisTask(analyzeOpinions)
 
-  function analyze(url: string, refresh = false) {
-    if (!url.trim() || request.current) return
-    const controller = new AbortController()
-    request.current = controller
-    mutation.mutate({ url: url.trim(), refresh, controller })
+  async function start(nextUrl: string, refresh = false) {
+    if (!nextUrl.trim()) return
+    setUrl(nextUrl.trim())
+    const snapshot = await preparation.run({ url: nextUrl.trim(), refresh })
+    if (!snapshot) return
+    topics.reset()
+    opinions.reset()
+    // Deliberately do not await either branch before starting the other.
+    void topics.run(snapshot.run_id)
+    void opinions.run(snapshot.run_id)
   }
 
   function reset() {
-    request.current?.abort()
-    request.current = null
-    mutation.reset()
-    setResults(null)
+    preparation.reset()
+    topics.reset()
+    opinions.reset()
+    setUrl(null)
   }
 
-  return { results, analyze, reset, loading: mutation.isPending, error: mutation.error?.message }
+  return {
+    url, snapshot: preparation.data, preparing: preparation.pending, prepareError: preparation.error,
+    topics, opinions, start, reset,
+    refresh: () => { if (url) void start(url, true) },
+    retryPreparation: () => { if (url) void start(url) },
+    retryTopics: () => { if (preparation.data) void topics.run(preparation.data.run_id) },
+    retryOpinions: () => { if (preparation.data) void opinions.run(preparation.data.run_id) },
+  }
 }

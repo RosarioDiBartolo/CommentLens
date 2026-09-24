@@ -1,7 +1,6 @@
 import styles from './analysis.module.css'
-import Brand from './Brand'
 import ClusterComments from './ClusterComments'
-import DecisionSignals, { SignalSummary } from './DecisionSignals'
+import { SignalSummary } from './DecisionSignals'
 import type { Analysis } from '../model'
 
 const CLUSTER_COLORS = [
@@ -18,38 +17,16 @@ function getEngagement(avgLikes: number) {
   return { label: 'Low', color: '#999', arrow: '↓' }
 }
 
-interface Props { results: Analysis; error?: string; analyze: (refresh?: boolean) => void; onReset: () => void }
+interface Props { results: Analysis }
 
-export default function AnalysisResults({ results, error, analyze, onReset }: Props) {
+export default function TopicResults({ results }: Props) {
   const totalFetched = results?.total_comments_fetched || 0;
   const totalCleaned = results?.total_after_cleaning || 0;
   const spamFiltered = totalFetched - totalCleaned;
   const spamPercentage = totalFetched > 0 ? Math.round((spamFiltered / totalFetched) * 100) : 0;
 
   return (
-    <div className={styles['page']}>
-      <div className={styles['results-header']}>
-        <Brand />
-        <button
-          className={styles['new-analysis-btn']}
-          onClick={onReset}
-        >
-          + New analysis
-        </button>
-      </div>
-
-      <div className={styles['results-body']}>
-        <div className={styles['video-info']}>
-          <p className={styles['eyebrow']}>Analysis complete</p>
-          <h2 className={styles['video-title']}>{results.video_title}</h2>
-          <div className={styles['cache-info']}>
-            <p>{results.cached ? 'Saved analysis' : 'Analysis updated'} · Last fetched{' '}
-              <time dateTime={results.fetched_at}>{new Date(results.fetched_at).toLocaleString()}</time>
-            </p>
-            <button className={styles['new-analysis-btn']} onClick={() => analyze(true)}>Refresh comments</button>
-          </div>
-          {error && <p className={styles['error-msg']} role="alert">Refresh failed: {error} Your previous results are still shown.</p>}
-        </div>
+    <>
         <div className={styles['metrics-row']}>
           <div className={styles['metric-card']}>
             <div className={styles['metric-icon']}>💬</div>
@@ -88,7 +65,7 @@ export default function AnalysisResults({ results, error, analyze, onReset }: Pr
           </div>
         </div>
 
-        <DecisionSignals decisions={results.decisions} onRetry={() => analyze()} />
+
 
         <div className={styles['clusters-section']}>
           <div className={styles['section-header']}>
@@ -163,10 +140,6 @@ export default function AnalysisResults({ results, error, analyze, onReset }: Pr
           </div>
         </div>
 
-      <p className={styles['footer']}>
-          CommentLens · Built with love.
-        </p>
-      </div>
-    </div>
+    </>
   )
 }

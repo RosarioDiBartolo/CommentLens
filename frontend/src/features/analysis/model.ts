@@ -10,7 +10,7 @@ const summarySchema = z.object({
   count,
   signals: z.record(z.string(), probabilities).optional(),
 })
-const decisionsSchema = z.object({
+export const decisionsSchema = z.object({
   status: z.enum(['disabled', 'complete', 'partial', 'unavailable']),
   provider: z.string().optional(),
   total: count.optional(),
@@ -39,3 +39,15 @@ export type Summary = z.infer<typeof summarySchema>
 export type Answers = z.infer<typeof answersSchema>
 export type Decisions = z.infer<typeof decisionsSchema>
 export interface AnalysisRequest { url: string; refresh: boolean }
+
+export const snapshotSchema = z.object({
+  run_id: z.uuid(), video_id: z.string(), video_title: z.string(),
+  fetched_at: z.iso.datetime({ offset: true }), total_comments_fetched: count, cached: z.boolean(),
+})
+export const opinionsSchema = z.object({
+  decisions: decisionsSchema.extend({ comments: z.array(z.object({
+    comment_id: z.string(), text: z.string(), author: z.string(), likes: count, answers: answersSchema,
+  })) }),
+})
+export type Snapshot = z.infer<typeof snapshotSchema>
+export type Opinions = z.infer<typeof opinionsSchema>

@@ -14,7 +14,7 @@ from pipeline.embedder import MODEL_VERSION, get_embeddings
 from pipeline.clusterer import cluster_comments, label_clusters
 from pipeline.main import get_comments
 from pipeline.decision_analysis import analyze_decisions, summarize
-from .models import Video, Comment, Embedding, Analysis, Cluster, ClusterMembership
+from .models import Video, Comment, Embedding, Analysis, Cluster, ClusterMembership, AnalysisRun
 
 MAX_COMMENTS = 50
 PIPELINE_VERSION = '1'
@@ -25,9 +25,14 @@ class InsufficientComments(ValueError):
     pass
 
 
+class SnapshotChanged(ValueError):
+    pass
+
+
 def purge_expired():
     cutoff = timezone.now() - timedelta(days=RETENTION_DAYS)
-    return Video.objects.filter(fetched_at__lte=cutoff).delete()[0]
+    runs = AnalysisRun.objects.filter(fetched_at__lte=cutoff).delete()[0]
+    return runs + Video.objects.filter(fetched_at__lte=cutoff).delete()[0]
 
 
 def signature():
@@ -105,7 +110,7 @@ def analyze_video(video_id, refresh=False):
     return result
 
 
-def analyze_semantics(video_id, refresh=False):
+def analyze_semantics(video_id, refresh=False, snapshot=None):
     purge_expired()
     now = timezone.now()
     ttl = timedelta(seconds=settings.ANALYSIS_CACHE_TTL_SECONDS)
@@ -113,7 +118,8 @@ def analyze_semantics(video_id, refresh=False):
     with transaction.atomic():
         current = Analysis.objects.select_related('video').filter(video_id=video_id).first()
         fresh = current and current.video.fetched_at > now - ttl
-        if current and fresh and not refresh and current.signature == signature():
+        same_snapshot = snapshot is None or (current and current.video.fetched_at == snapshot.fetched_at)
+        if current and fresh and not refresh and same_snapshot and current.signature == signature():
             return serialize(current, cached=True)
         # Changed pipeline settings can reuse a fresh comment snapshot.
         if fresh and not refresh:
@@ -121,13 +127,17 @@ def analyze_semantics(video_id, refresh=False):
                         updated_at=c.updated_at, video_title=current.video.title)
                    for c in current.video.comments.order_by('youtube_id')]
             fetched_at = current.video.fetched_at
-    if not fresh or refresh:
+    if snapshot is not None:
+        raw = snapshot.comments
+        fetched_at = snapshot.fetched_at
+    elif not fresh or refresh:
         raw = get_comments(video_id, max_comments=MAX_COMMENTS)
         fetched_at = timezone.now()
     cleaned = sorted(clean_comments(raw), key=lambda c: c['comment_id'])
     if len(raw) < 10 or len(cleaned) < 5:
         # A successful refresh must not keep serving a superseded snapshot.
-        Video.objects.filter(pk=video_id, fetched_at__lte=fetched_at).delete()
+        if snapshot is None:
+            Video.objects.filter(pk=video_id, fetched_at__lte=fetched_at).delete()
         message = ('Not enough comments to analyze' if len(raw) < 10
                    else 'Not enough meaningful comments after cleaning')
         raise InsufficientComments(message)
@@ -158,6 +168,8 @@ def analyze_semantics(video_id, refresh=False):
         newer = Analysis.objects.select_related('video').filter(
             video_id=video_id, video__fetched_at__gt=fetched_at, signature=signature()).first()
         if newer:
+            if snapshot is not None:
+                raise SnapshotChanged('A newer comment snapshot is available. Refresh comments to continue.')
             return serialize(newer, cached=True)
         video, _ = Video.objects.update_or_create(pk=video_id, defaults={
             'title': raw[0]['video_title'], 'fetched_at': fetched_at})
@@ -194,3 +206,63 @@ def analyze_semantics(video_id, refresh=False):
                 for c in result['comments']])
         # Read the response in the same transaction as the coherent snapshot.
         return serialize(analysis, cached=False)
+
+
+def prepare_analysis(video_id, refresh=False):
+    """Fetch once, without running either model, and retain immutable raw inputs."""
+    purge_expired()
+    cutoff = timezone.now() - timedelta(seconds=settings.ANALYSIS_CACHE_TTL_SECONDS)
+    previous = AnalysisRun.objects.filter(video_id=video_id).order_by('-fetched_at').first()
+    with transaction.atomic():
+        video = Video.objects.filter(pk=video_id, fetched_at__gt=cutoff).first()
+        if not refresh and previous and previous.fetched_at > cutoff and (
+                video is None or previous.fetched_at >= video.fetched_at):
+            return serialize_run(previous, cached=True)
+        if not refresh and video:
+            raw = [dict(comment_id=c.pk, text=c.text, author=c.author, likes=c.likes,
+                        updated_at=c.updated_at, video_title=video.title)
+                   for c in video.comments.order_by('youtube_id')]
+            fetched_at = video.fetched_at
+        else:
+            raw = None
+    cached = raw is not None
+    if raw is None:
+        raw = get_comments(video_id, max_comments=MAX_COMMENTS)
+        fetched_at = max([timezone.now()] + [item.fetched_at + timedelta(microseconds=1)
+                          for item in (previous, video) if item is not None])
+    if not raw:
+        raise InsufficientComments('No public comments are available for this video.')
+    # The inference cache validates text, title and model signatures before reuse.
+    previous_opinions = previous.opinion_data if previous else (
+        Analysis.objects.filter(video_id=video_id).values_list('decision_data', flat=True).first() or {})
+    run = AnalysisRun.objects.create(video_id=video_id, video_title=raw[0]['video_title'],
+                                     fetched_at=fetched_at, comments=raw, opinion_data=previous_opinions)
+    return serialize_run(run, cached)
+
+
+def serialize_run(run, cached):
+    return {'run_id': str(run.pk), 'video_id': run.video_id, 'video_title': run.video_title,
+            'fetched_at': run.fetched_at.isoformat(), 'total_comments_fetched': len(run.comments),
+            'cached': cached}
+
+
+def get_run(run_id):
+    cutoff = timezone.now() - timedelta(days=RETENTION_DAYS)
+    return AnalysisRun.objects.get(pk=run_id, fetched_at__gt=cutoff)
+
+
+def analyze_topics(run_id):
+    run = get_run(run_id)
+    return analyze_semantics(run.video_id, snapshot=run)
+
+
+def analyze_opinions(run_id):
+    run = get_run(run_id)
+    decisions = analyze_decisions(run.comments, run.video_title, run.opinion_data)
+    AnalysisRun.objects.filter(pk=run.pk).update(opinion_data=decisions)
+    # Return display metadata as well as predictions, so this panel never needs topics.
+    by_id = {comment['comment_id']: comment for comment in run.comments}
+    display = dict(decisions, comments=[dict(row, text=by_id[row['comment_id']]['text'],
+                   author=by_id[row['comment_id']]['author'], likes=by_id[row['comment_id']]['likes'])
+                   for row in decisions['comments']])
+    return {'decisions': display}

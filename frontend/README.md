@@ -50,16 +50,34 @@ Django remains responsible for persistence, YouTube access, and inference.
 - `src/App.tsx`: provider composition and selection of the current screen.
 - `src/features/analysis/model.ts`: Zod response schemas and inferred domain types.
 - `src/features/analysis/api.ts`: the HTTP boundary; validates unknown responses and normalizes errors.
-- `src/features/analysis/useAnalysis.ts`: TanStack Query mutation lifecycle, duplicate submission guard, cancellation, and the last successful result.
-- `src/features/analysis/components/`: input, loading, results, comments, and opinion components, styled with a feature CSS Module.
+- `src/features/analysis/useAnalysis.ts`: comment preparation followed by independent topic/opinion tasks.
+- `src/features/analysis/useAnalysisTask.ts`: isolated TanStack Query mutation lifecycle, duplicate submission guard, cancellation, and the last successful result.
+- `src/features/analysis/components/`: input, workspace, topics, comments, and opinion components, styled with a feature CSS Module.
 - `src/index.css`: shared design tokens and global accessibility defaults.
 
-Analysis is an explicit POST mutation. Automatic retries are disabled because a
-request can trigger expensive work. Client cancellation stops listening to the
-request; it does not guarantee Django has stopped processing it. Saved results
-remain visible after transient refresh failures; a 400 response clears an invalid
-snapshot. New analysis resets the result. No result is persisted in browser storage.
-Loading progress is an estimate, and its timer is disposed when the screen unmounts.
+Submitting opens the workspace immediately. There is no timed progress screen,
+percentage estimate, or combined loading state. A shared comment preparation
+request creates an immutable snapshot; topic and opinion requests then start in
+parallel. Each panel displays its own pending state, error, result, and retry.
+An opinion retry never runs embeddings/clustering or refetches YouTube comments.
+Opinion results and classified comments remain usable even if topic discovery
+fails or there are too few comments to cluster.
+
+`POST /api/runs/` takes `{ url, refresh }` and returns a `run_id` plus video metadata.
+`POST /api/runs/<run_id>/topics/` and `/opinions/` process that same snapshot.
+The original `/api/analyze/` endpoint remains available for older clients.
+
+Automatic retries are disabled because requests can trigger expensive work.
+Client cancellation stops listening; it does not guarantee the server has stopped.
+New analysis aborts all current requests and discards late responses. Refresh
+keeps the previous results until a fresh snapshot is ready, then restarts both
+panels. A failed comment refresh preserves the current panels, including tasks
+still running. No result is persisted in browser storage.
+
+Deploy the backend and run `python manage.py migrate` before deploying this
+frontend; migration 0003 adds the snapshot table. Snapshots expire with the
+existing 29-day retention policy. Serve Django with concurrent request capacity
+(e.g. multiple workers/threads) so one long analysis does not queue the other.
 
 The current app has one workflow, so it does not need a router or a global state
 store. Add routes when distinct, addressable pages are introduced. Keep UI-only
