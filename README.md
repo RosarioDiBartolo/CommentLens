@@ -166,7 +166,7 @@ CommentLens/
     ├── package.json         # npm commands and dependencies
     ├── package-lock.json    # Reproducible npm install
     ├── vite.config.js       # Vite + React configuration
-    └── src/                 # Dashboard and styles; App.jsx calls the API
+    └── src/                 # Typed dashboard, feature components, and validated API boundary
 ```
 
 ## Saved analyses and reusable embeddings

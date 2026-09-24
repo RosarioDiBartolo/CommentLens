@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import ClusterComments from './components/ClusterComments'
+import ClusterComments from './features/analysis/components/ClusterComments'
 import App from './App'
 import axios from 'axios'
 

@@ -1,9 +1,16 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+:root {
+  --color-canvas: #FAF9F6;
+  --color-text: #2D2D2D;
+  --color-accent: #E8645A;
+  --color-border: #E8E8E8;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--color-text);
+  background: var(--color-canvas);
 }
-
-body {
-  background-color: #0f0f0f;
+* { box-sizing: border-box; margin: 0; padding: 0; }
+button:disabled { cursor: not-allowed; opacity: .6; }
+button:focus-visible, summary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }

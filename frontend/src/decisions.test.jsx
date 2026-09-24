@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import DecisionSignals, { CommentDecisions } from './components/DecisionSignals'
+import DecisionSignals, { CommentDecisions } from './features/analysis/components/DecisionSignals'
 
 afterEach(cleanup)
 const summary = { count: 2, signals: {
