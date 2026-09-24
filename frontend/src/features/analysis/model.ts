@@ -20,6 +20,7 @@ export const decisionsSchema = z.object({
 const commentSchema = z.object({
   comment_id: z.string(), text: z.string(), author: z.string(),
   likes: count, similarity: z.number(), decisions: answersSchema.optional(),
+  replies: count.nullish(), published_at: z.iso.datetime({ offset: true }).nullish(),
 })
 export const analysisSchema = z.object({
   analysis_id: z.number().int(), video_id: z.string(), video_title: z.string(),
@@ -30,10 +31,15 @@ export const analysisSchema = z.object({
     cluster_id: z.number().int(), title: z.string(), size: count,
     avg_likes: z.number().nonnegative(), percentage: z.number().min(0).max(100),
     comments: z.array(commentSchema), decision_summary: summarySchema.optional(),
+    keywords: z.array(z.string()).optional(),
   })),
 })
 
 export type Analysis = z.infer<typeof analysisSchema>
+export type Cluster = Analysis['clusters'][number]
+export type Sentiment = 'positive' | 'neutral' | 'negative' | 'unclassified'
+export type VideoMetadata = Pick<Analysis, 'video_id' | 'video_title' | 'fetched_at'>
+export type AnalysisTotals = Pick<Analysis, 'total_comments_fetched' | 'total_after_cleaning'>
 export type Comment = z.infer<typeof commentSchema>
 export type Summary = z.infer<typeof summarySchema>
 export type Answers = z.infer<typeof answersSchema>

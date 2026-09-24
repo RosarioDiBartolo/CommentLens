@@ -1,9 +1,9 @@
 import styles from './analysis.module.css'
 import type { Comment } from '../model'
 import { useState } from 'react'
-import { CommentDecisions } from './DecisionSignals'
+import CommentCard from './CommentCard'
 
-export default function ClusterComments({ comments }: { comments: Comment[] }) {
+export default function ClusterComments({ comments, total = comments.length }: { comments: Comment[]; total?: number }) {
   const [order, setOrder] = useState('representative')
   const [limit, setLimit] = useState(6)
   const representative = [...comments].sort((a, b) =>
@@ -30,21 +30,11 @@ export default function ClusterComments({ comments }: { comments: Comment[] }) {
           ? 'Closest to the topic centre first, followed by the next closest comments.'
           : 'Comments in this topic, ranked by like count.'}
       </p>
+      <p className={styles['comment-help']} aria-live="polite">Showing {shown.length} of {total} comments</p>
       <ol className={styles['comment-list']} aria-label={order === 'representative'
         ? 'Most representative comments' : 'Most liked comments'}>
         {shown.map((comment) => (
-          <li key={comment.comment_id} className={styles['comment-item']}>
-            {order === 'representative' && comment.comment_id === representative[0]?.comment_id && (
-              <span className={styles['representative-badge']}>Most representative</span>
-            )}
-            <p className={styles['rep-text']}>{comment.text}</p>
-            <div className={styles['comment-meta']}>
-              <span>{comment.author || 'Unknown author'}</span>
-              <span aria-label={`${comment.likes} likes`}>♥ {comment.likes.toLocaleString()}</span>
-
-            </div>
-            <CommentDecisions answers={comment.decisions} />
-          </li>
+          <CommentCard key={comment.comment_id} comment={comment} representative={order === 'representative' && comment.comment_id === representative[0]?.comment_id} />
         ))}
       </ol>
       {comments.length === 0 && <p className={styles['comment-help']}>No comments in this topic.</p>}

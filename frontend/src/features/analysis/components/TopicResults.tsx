@@ -1,145 +1,51 @@
-import styles from './analysis.module.css'
-import ClusterComments from './ClusterComments'
-import { SignalSummary } from './DecisionSignals'
-import type { Analysis } from '../model'
+import { useMemo, useState, type ReactNode } from 'react'
+import { ChevronDown, Network } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible'
+import type { Analysis, Opinions, Sentiment } from '../model'
+import { clusterColor, filterClusters, prepareClusters, type ClusterSort } from '../clusterView'
+import ClusterCard from './ClusterCard'
+import ClusterMap from './ClusterMap'
+import ClusterToolbar from './ClusterToolbar'
+import styles from './explorer.module.css'
 
-const CLUSTER_COLORS = [
-  { border: '#E8645A', numColor: '#E8645A', numBg: '#FFF5F4', badge: '#FFE8E6', badgeText: '#C0392B' },
-  { border: '#F0A500', numColor: '#F0A500', numBg: '#FFFBF0', badge: '#FFF3CD', badgeText: '#8B6200' },
-  { border: '#7B68EE', numColor: '#7B68EE', numBg: '#F8F7FF', badge: '#EDEDFF', badgeText: '#3D35A0' },
-  { border: '#3DAA7D', numColor: '#3DAA7D', numBg: '#F4FBF8', badge: '#E0F5EC', badgeText: '#1A6B4A' },
-  { border: '#E87D5A', numColor: '#E87D5A', numBg: '#FFF7F4', badge: '#FFE8DC', badgeText: '#A03A1A' },
-]
-
-function getEngagement(avgLikes: number) {
-  if (avgLikes >= 5) return { label: 'High', color: '#3DAA7D', arrow: '↑' }
-  if (avgLikes >= 2) return { label: 'Medium', color: '#F0A500', arrow: '→' }
-  return { label: 'Low', color: '#999', arrow: '↓' }
-}
-
-interface Props { results: Analysis }
-
-export default function TopicResults({ results }: Props) {
-  const totalFetched = results?.total_comments_fetched || 0;
-  const totalCleaned = results?.total_after_cleaning || 0;
-  const spamFiltered = totalFetched - totalCleaned;
-  const spamPercentage = totalFetched > 0 ? Math.round((spamFiltered / totalFetched) * 100) : 0;
-
-  return (
-    <>
-        <div className={styles['metrics-row']}>
-          <div className={styles['metric-card']}>
-            <div className={styles['metric-icon']}>💬</div>
-            <div>
-              <p className={styles['metric-num']}>{totalFetched}</p>
-              <p className={styles['metric-label']}>Total Comments</p>
-              <p className={styles['metric-sub']}>Sampled from this video</p>
-            </div>
-          </div>
-          
-          <div className={styles['metric-card']}>
-            <div className={styles['metric-icon']}>🛡️</div>
-            <div>
-              <p className={styles['metric-num']}>{spamFiltered}</p>
-              <p className={styles['metric-label']}>Filtered Comments</p>
-              <p className={styles['metric-sub']}>{spamPercentage}% noise filtered</p>
-            </div>
-          </div>
-
-          <div className={styles['metric-card']}>
-            <div className={styles['metric-icon']}>✨</div>
-            <div>
-              <p className={styles['metric-num']}>{totalCleaned}</p>
-              <p className={styles['metric-label']}>Signal Comments</p>
-              <p className={styles['metric-sub']}>Used for topic discovery</p>
-            </div>
-          </div>
-
-          <div className={styles['metric-card']}>
-            <div className={styles['metric-icon']}>🔍</div>
-            <div>
-              <p className={styles['metric-num']}>{results.clusters.length}</p>
-              <p className={styles['metric-label']}>Topics Found</p>
-              <p className={styles['metric-sub']}>Ranked by impact</p>
-            </div>
-          </div>
-        </div>
-
-
-
-        <div className={styles['clusters-section']}>
-          <div className={styles['section-header']}>
-            <span className={styles['sparkle']}>✦</span>
-            <h3 className={styles['section-title']}>Top Audience Signals</h3>
-          </div>
-
-          {results.clusters.length === 0 && <p className={styles['comment-help']}>No clear topics were found in this sample. Try another video or refresh its comments.</p>}
-          <div className={styles['clusters-list']}>
-            {results.clusters.map((cluster, idx) => {
-              const color = CLUSTER_COLORS[idx % CLUSTER_COLORS.length]
-              const engagement = getEngagement(cluster.avg_likes)
-
-              return (
-                <div
-                  key={cluster.cluster_id}
-                  className={styles['cluster-card']}
-                  style={{ borderLeftColor: color.border }}
-                >
-                  <div className={styles['cluster-top']}>
-                    <div
-                      className={styles['cluster-num']}
-                      style={{ color: color.numColor, background: color.numBg }}
-                    >
-                      {String(idx + 1).padStart(2, '0')}
-                    </div>
-
-                    <div className={styles['cluster-main']}>
-                      <div className={styles['cluster-title-row']}>
-                        <h4 className={styles['cluster-title']}>
-                          {cluster.title || `Topic Signal #${idx + 1}`}
-                        </h4>
-                        
-                        <span
-                          className={styles['percent-badge']}
-                          style={{ background: color.badge, color: color.badgeText }}
-                        >
-                          {cluster.percentage}% of comments
-                        </span>
-                      </div>
-
-                      <p className={styles['cluster-sub']}>
-                        {cluster.size} comments in this topic cluster
-                      </p>
-
-                      <ClusterComments
-                        key={`${results.analysis_id}-${cluster.cluster_id}`}
-                        comments={cluster.comments || []}
-                      />
-                      {cluster.decision_summary && cluster.decision_summary.count > 0 && <details className={styles['topic-decisions']}>
-                        <summary>Opinion signals for this topic ({cluster.decision_summary.count}/{cluster.size} comments)</summary>
-                        <SignalSummary summary={cluster.decision_summary} />
-                      </details>}
-                    </div>
-
-                    <div className={styles['cluster-stats']}>
-                      <div className={styles['engagement-box']}>
-                        <p className={styles['eng-label']}>Engagement</p>
-                        <p className={styles['eng-value']} style={{ color: engagement.color }}>
-                          {engagement.label} {engagement.arrow}
-                        </p>
-                      </div>
-                      <div className={styles['engagement-box']}>
-                        <p className={styles['eng-label']}>Avg. Likes</p>
-                        <p className={styles['eng-num']}>{cluster.avg_likes}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-    </>
-  )
+export default function TopicResults({ results, opinions, overview, opinionPanel }: { results?: Analysis; opinions?: Opinions; overview?: ReactNode; opinionPanel?: ReactNode }) {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [hovered, setHovered] = useState<number | null>(null)
+  const [focused, setFocused] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
+  const [sentiment, setSentiment] = useState<Sentiment | 'all'>('all')
+  const [sort, setSort] = useState<ClusterSort>('volume')
+  const [mapOpen, setMapOpen] = useState(() => typeof window === 'undefined' || typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 1001px)').matches)
+  const clusters = useMemo(() => results ? prepareClusters(results, opinions) : [], [results, opinions])
+  const filtered = filterClusters(clusters, search, sentiment, sort)
+  const toggle = (id: number) => setExpanded(previous => {
+    const next = new Set(previous)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  const highlighted = hovered ?? focused
+  return <div className={styles.layout}>
+    <aside className={styles.sidebar}>
+      {overview}
+      {results && clusters.length > 0 && <Collapsible open={mapOpen} onOpenChange={setMapOpen} className={styles.mapPanel}>
+        <CollapsibleTrigger className={styles.mapToggle}><Network size={16} aria-hidden="true" />Cluster map<ChevronDown size={16} aria-hidden="true" /></CollapsibleTrigger>
+        <CollapsibleContent><ClusterMap clusters={clusters} visibleIds={new Set(filtered.map(c => c.cluster_id))} expanded={expanded}
+          highlighted={highlighted} onToggle={toggle} onHover={setHovered} onFocus={setFocused} /></CollapsibleContent>
+      </Collapsible>}
+    </aside>
+    <section className={styles.browser} aria-label="Cluster browser">
+      <div className={styles.browserHeading}><h2>Explore clusters</h2><span>{clusters.length} topics</span></div>
+      <ClusterToolbar search={search} onSearch={setSearch} sentiment={sentiment} onSentiment={setSentiment} sort={sort} onSort={setSort}
+        hasExpanded={expanded.size > 0} onCollapse={() => setExpanded(new Set())} />
+      <div className={styles.clusterList}>
+        {!results ? <p className={styles.empty}>Your clusters will appear here when topic discovery finishes.</p>
+          : !clusters.length ? <p className={styles.empty}>No clear topics were found in this sample. Try another video or refresh its comments.</p>
+          : !filtered.length ? <div className={styles.empty}><p>No clusters match your filters.</p><button className={styles.button} onClick={() => { setSearch(''); setSentiment('all') }}>Clear filters</button></div>
+          : filtered.map(cluster => <ClusterCard key={cluster.cluster_id} cluster={cluster} color={clusterColor(clusters.indexOf(cluster))}
+            expanded={expanded.has(cluster.cluster_id)} highlighted={highlighted === cluster.cluster_id} onToggle={() => toggle(cluster.cluster_id)} onHover={setHovered} onFocus={setFocused} />)}
+      </div>
+      <footer className={styles.footer} aria-live="polite">{filtered.length} of {clusters.length} clusters · {filtered.reduce((sum, c) => sum + c.size, 0).toLocaleString()} comments in filtered clusters</footer>
+    </section>
+    <div className={styles.opinions}>{opinionPanel}</div>
+  </div>
 }

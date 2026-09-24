@@ -99,3 +99,36 @@ npm run test:e2e
 
 Playwright starts its own Vite server on port 5175 and checks desktop and mobile
 workflows. GitHub Actions runs these checks on frontend changes.
+
+## Cluster explorer
+
+The analysis workspace follows the supplied bubble-map prototype using the existing
+ivory/coral palette, DM Sans/Lora fonts, and CSS modules. The repository has no
+Tailwind or dark-theme token set. `explorer.module.css` uses the application tokens;
+cluster identity colors reuse the former topic-card palette. Lucide supplies icons,
+and the shared Collapsible wrapper uses the Radix primitive used by shadcn/ui.
+
+`clusterView.ts` joins opinion answers to topic comments by `comment_id`. Cluster
+sentiment is the highest average probability among classified members, with ties
+and missing classifications marked unclassified. Coverage is shown in expanded
+cards. Search uses labels and keywords; sentiment sorting groups positive, neutral,
+negative, then unclassified clusters, with volume and ID as deterministic tie-breakers.
+
+No prototype data is shipped. Until the API supplies dedicated keywords, `Topic:`
+labels are split into the keywords already extracted by the backend and marked
+"From topic label". Optional `published_at` and `replies` are accepted, but the
+current backend does not send them: the UI explicitly displays unavailable values.
+No channel, view count, thumbnail, or generated video summary is fabricated.
+
+Bubble geometry is computed separately from domain data. Area represents volume;
+position does not encode semantic similarity. Filtering dims excluded bubbles
+without moving the layout; those bubbles are disabled and removed from tab order.
+Map, legend, and cards share expansion and hover/focus state. Filters retain expanded
+IDs and Collapse all clears every expansion, including hidden clusters. A new
+analysis resets explorer state. The map starts collapsed on tablet/mobile; opinion
+reports follow the cluster browser at those widths.
+
+`npm run check` covers TypeScript, lint, unit tests and production build.
+`npm run test:e2e` covers desktop/mobile interactions, keyboard activation, reduced
+motion, filter totals, empty states, comment ordering, and independent request failures.
+Browser tests use intercepted API fixtures only; production uses the live endpoints.
